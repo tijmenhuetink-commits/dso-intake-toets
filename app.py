@@ -12,10 +12,7 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import importlib.util as _ilu
 
-_echte_input = builtins.input
-def _web_input(prompt=""):
-    # Stille keuze — geen output naar terminal
-    return "1"
+
 
 def _laad(naam):
     pad = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{naam}.py")
@@ -24,10 +21,8 @@ def _laad(naam):
     spec.loader.exec_module(mod)
     return mod
 
-builtins.input = _web_input
 _dso   = _laad("dso_bestemmingsplan")
 _toets = _laad("genereer_intake_toets")
-builtins.input = _echte_input
 
 haal_data_voor_adres       = _dso.haal_data_voor_adres
 haal_data_voor_coordinaten = _dso.haal_data_voor_coordinaten
@@ -130,19 +125,25 @@ def adres_naar_xy(doc):
     return None, None
 
 def run_en_toon(fn, *args):
-    """Voert fn uit, slaat terminal output op in session_state, geeft resultaat terug."""
-    class Live(io.StringIO):
-        def write(self, t):
-            super().write(t)
-            st.session_state.terminal_log = self.getvalue()
-            return len(t)
-    live = Live()
-    old_out = sys.stdout; sys.stdout = live
-    builtins.input = _web_input
-    try:
-        return fn(*args)
-    finally:
-        sys.stdout = old_out; builtins.input = _echte_input
+    """Voert fn uit, vangt stdout op en toont resultaat netjes."""
+    with st.status("⏳ Data ophalen...", expanded=True) as status:
+        ph = st.empty()
+        class Live(io.StringIO):
+            def write(self, t):
+                super().write(t)
+                ph.markdown(f'<div class="terminal">{self.getvalue()}</div>', unsafe_allow_html=True)
+                return len(t)
+        live = Live()
+        old_out = sys.stdout; sys.stdout = live
+        try:
+            resultaat = fn(*args)
+            status.update(label="✅ Data opgehaald", state="complete", expanded=False)
+            return resultaat
+        except Exception as e:
+            status.update(label=f"❌ Fout: {e}", state="error", expanded=True)
+            raise
+        finally:
+            sys.stdout = old_out
 
 def kaart(label, waarde):
     heeft = waarde and waarde not in ("—", "geen", "")
