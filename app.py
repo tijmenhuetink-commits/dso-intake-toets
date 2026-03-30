@@ -93,7 +93,7 @@ st.markdown(
 st.markdown("---")
 
 # ── Session state initialiseren ───────────────────────────────────────────────
-for k, v in {"fase": "invoer", "kandidaten": [], "gekozen": None, "data": None}.items():
+for k, v in {"fase": "invoer", "kandidaten": [], "gekozen": None, "data": None, "terminal_log": ""}.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -122,21 +122,21 @@ def zoek_adressen(adres_str):
     return res if res else docs[:5]
 
 def run_en_toon(fn, *args):
-    """Voert fn uit, toont live terminal output, geeft resultaat terug."""
-    st.markdown('<div class="stap-label">Stap 2 — Data ophalen via DSO API</div>', unsafe_allow_html=True)
+    """Voert fn uit, slaat terminal output op in session_state, geeft resultaat terug."""
     ph = st.empty()
     class Live(io.StringIO):
         def write(self, t):
             super().write(t)
+            st.session_state.terminal_log = self.getvalue()
             ph.markdown(f'<div class="terminal">{self.getvalue()}</div>', unsafe_allow_html=True)
             return len(t)
     live = Live()
-    old = sys.stdout; sys.stdout = live
+    old_out = sys.stdout; sys.stdout = live
     builtins.input = _web_input
     try:
         return fn(*args)
     finally:
-        sys.stdout = old; builtins.input = _echte_input
+        sys.stdout = old_out; builtins.input = _echte_input
 
 def kaart(label, waarde):
     heeft = waarde and waarde not in ("—", "geen", "")
@@ -292,6 +292,10 @@ elif st.session_state.fase == "ophalen" and st.session_state.gekozen:
 if st.session_state.fase == "resultaat" and st.session_state.data:
     data  = st.session_state.data
     label = (data.get("adres_gevonden") or data.get("adres","locatie")).split(",")[0]
+    # Toon alleen de terminal log van de laatste run
+    if st.session_state.get("terminal_log"):
+        st.markdown('<div class="stap-label">Stap 2 — Data ophalen via DSO API</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="terminal">{st.session_state.terminal_log}</div>', unsafe_allow_html=True)
     toon_resultaten(data)
     toon_download(data, label)
     if st.button("🔄 Nieuw adres opzoeken"):
