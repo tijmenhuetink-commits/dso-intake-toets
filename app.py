@@ -171,14 +171,19 @@ def toon_resultaten(data):
 def toon_download(data, label):
     st.markdown("---")
     st.markdown('<div class="stap-label">Stap 4 — Download Word-document</div>', unsafe_allow_html=True)
-    with st.spinner("Word-document genereren..."):
-        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
-            tmp_pad = tmp.name
-        genereer_intake_toets(data, uitvoer_pad=tmp_pad)
-        with open(tmp_pad, "rb") as f: docx_bytes = f.read()
-        os.unlink(tmp_pad)
+    # Genereer het document alleen als het nog niet in session_state zit
+    cache_key = f"docx_{label}"
+    if cache_key not in st.session_state:
+        with st.spinner("Word-document genereren..."):
+            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+                tmp_pad = tmp.name
+            genereer_intake_toets(data, uitvoer_pad=tmp_pad)
+            with open(tmp_pad, "rb") as f:
+                st.session_state[cache_key] = f.read()
+            os.unlink(tmp_pad)
     naam = f"Intake_toets_{label.replace(' ','_')[:25]}_{date.today().strftime('%Y%m%d')}.docx"
-    st.download_button("📄  Download Intake Toets (.docx)", data=docx_bytes, file_name=naam,
+    st.download_button("📄  Download Intake Toets (.docx)",
+        data=st.session_state[cache_key], file_name=naam,
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     st.success(f"✅ Klaar! Klik op de knop om **{naam}** te downloaden.")
 
