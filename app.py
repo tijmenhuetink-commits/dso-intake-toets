@@ -99,6 +99,7 @@ for k, v in {"fase": "invoer", "kandidaten": [], "gekozen": None, "data": None, 
 
 # ── Hulpfuncties ──────────────────────────────────────────────────────────────
 def zoek_adressen(adres_str):
+    """Geeft lijst van dicts terug met weergavenaam + rd-coördinaten."""
     params = {"q": adres_str, "fq": "type:adres", "rows": 100, "fl": "id,weergavenaam,centroide_rd"}
     r = _req.get(f"{LS_BASE}/free", params=params, timeout=10)
     r.raise_for_status()
@@ -120,6 +121,13 @@ def zoek_adressen(adres_str):
         if match(n) and n not in gezien:
             gezien.add(n); res.append(d)
     return res if res else docs[:5]
+
+def adres_naar_xy(doc):
+    """Haal RD-coördinaten op uit een PDOK doc dict."""
+    rd = doc.get("centroide_rd", "").replace("POINT(", "").replace(")", "").split()
+    if len(rd) == 2:
+        return float(rd[0]), float(rd[1])
+    return None, None
 
 def run_en_toon(fn, *args):
     """Voert fn uit, slaat terminal output op in session_state, geeft resultaat terug."""
@@ -246,19 +254,24 @@ if zoek_knop:
             st.error(f"❌ Geen adressen gevonden voor '{adres_input}'")
             st.session_state.fase = "invoer"
         elif len(kandidaten) == 1:
-            # Directe match — meteen ophalen
+            # Directe match — haal coördinaten op en sla op
             gekozen = kandidaten[0].get("weergavenaam", adres_input)
+            x, y = adres_naar_xy(kandidaten[0])
             st.info(f"📍 {gekozen}")
             try:
                 with st.spinner("Bezig..."):
-                    data = run_en_toon(haal_data_voor_adres, gekozen)
+                    data = run_en_toon(haal_data_voor_coordinaten, x, y)
+                data["adres_gevonden"] = gekozen
                 st.session_state.data = data
                 st.session_state.fase = "resultaat"
             except Exception as e:
                 st.error(f"❌ {e}"); st.stop()
         else:
-            # Meerdere kandidaten → keuzemenu
-            st.session_state.kandidaten = [d.get("weergavenaam","?") for d in kandidaten]
+            # Meerdere kandidaten → keuzemenu, sla naam + coördinaten op
+            st.session_state.kandidaten = [
+                {"naam": d.get("weergavenaam","?"), "xy": adres_naar_xy(d)}
+                for d in kandidaten
+            ]
             st.session_state.fase = "keuze"
             st.rerun()
     else:
@@ -269,9 +282,12 @@ if zoek_knop:
 elif st.session_state.fase == "keuze" and st.session_state.kandidaten:
     st.markdown("---")
     st.markdown('<div class="stap-label">Meerdere adressen gevonden — kies er één</div>', unsafe_allow_html=True)
-    keuze = st.radio("Kies het juiste adres:", st.session_state.kandidaten, key="adres_keuze")
+    namen = [k["naam"] for k in st.session_state.kandidaten]
+    keuze_naam = st.radio("Kies het juiste adres:", namen, key="adres_keuze")
     if st.button("✓ Dit adres gebruiken"):
-        st.session_state.gekozen = keuze
+        # Zoek de bijbehorende coördinaten op
+        gekozen_item = next(k for k in st.session_state.kandidaten if k["naam"] == keuze_naam)
+        st.session_state.gekozen = gekozen_item
         st.session_state.fase    = "ophalen"
         st.rerun()
 
@@ -279,10 +295,13 @@ elif st.session_state.fase == "keuze" and st.session_state.kandidaten:
 elif st.session_state.fase == "ophalen" and st.session_state.gekozen:
     st.markdown("---")
     gekozen = st.session_state.gekozen
-    st.info(f"📍 {gekozen}")
+    naam = gekozen["naam"]
+    x, y = gekozen["xy"]
+    st.info(f"📍 {naam}")
     try:
         with st.spinner("Bezig..."):
-            data = run_en_toon(haal_data_voor_adres, gekozen)
+            data = run_en_toon(haal_data_voor_coordinaten, x, y)
+        data["adres_gevonden"] = naam
         st.session_state.data = data
         st.session_state.fase = "resultaat"
     except Exception as e:
