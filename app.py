@@ -367,5 +367,3 @@ if st.session_state.get("gekozen_adres"):
     st.markdown('<div class="stap-label">Stap 3 — Gevonden gegevens</div>', unsafe_allow_html=True)
     toon_resultaten(data)
     toon_download(data, gekozen.split(",")[0])
-    else:
-        st.warning("⚠️ Vul eerst een adres in.")
