@@ -287,6 +287,9 @@ def toon_download(data, label):
 
 # ── Hoofdlogica ───────────────────────────────────────────────────────────────
 if zoek_knop:
+    # Reset vorige run
+    for k in ["toon_keuze","kandidaten","gekozen_adres"]:
+        st.session_state[k] = False if k=="toon_keuze" else ([] if k=="kandidaten" else None)
     st.markdown("---")
 
     # Coördinaten
@@ -328,30 +331,41 @@ if zoek_knop:
             toon_resultaten(data)
             toon_download(data, gekozen.split(",")[0])
         else:
-            # Keuzemenu — sla kandidaten op in session_state
-            st.session_state["kandidaten"] = kandidaten
+            # Sla kandidaten op voor het keuzemenu
+            st.session_state["kandidaten"] = [d.get("weergavenaam","?") for d in kandidaten]
             st.session_state["toon_keuze"] = True
+            st.session_state["gekozen_adres"] = None
 
-# Keuzemenu tonen (buiten de zoek_knop block zodat het na herrender blijft staan)
+# ── Keuzemenu (buiten zoek_knop zodat het na herrender blijft) ────────────────
 if st.session_state.get("toon_keuze") and st.session_state.get("kandidaten"):
-    kandidaten = st.session_state["kandidaten"]
     st.markdown("---")
     st.markdown('<div class="stap-label">Meerdere adressen gevonden — kies er één</div>', unsafe_allow_html=True)
-    namen = [d.get("weergavenaam","?") for d in kandidaten]
+    namen = st.session_state["kandidaten"]
     keuze = st.radio("Kies het juiste adres:", namen, key="adres_keuze")
+
     if st.button("✓ Dit adres gebruiken"):
+        # Sla het exacte gekozen adres op en verberg keuzemenu
+        st.session_state["gekozen_adres"] = keuze
         st.session_state["toon_keuze"] = False
-        st.session_state["kandidaten"] = []
-        st.markdown('<div class="stap-label">Stap 2 — Data ophalen via DSO API</div>', unsafe_allow_html=True)
-        st.info(f"📍 {keuze}")
-        try:
-            with st.spinner("Bezig met ophalen..."):
-                data = run_met_capture(haal_data_voor_adres, keuze)
-        except Exception as e:
-            st.error(f"❌ Fout: {e}"); st.stop()
-        st.markdown("---")
-        st.markdown('<div class="stap-label">Stap 3 — Gevonden gegevens</div>', unsafe_allow_html=True)
-        toon_resultaten(data)
-        toon_download(data, keuze.split(",")[0])
+        st.rerun()
+
+# ── Verwerk het gekozen adres na rerun ────────────────────────────────────────
+if st.session_state.get("gekozen_adres"):
+    gekozen = st.session_state["gekozen_adres"]
+    st.session_state["gekozen_adres"] = None  # reset zodat het niet opnieuw draait
+    st.markdown("---")
+    st.markdown('<div class="stap-label">Stap 2 — Data ophalen via DSO API</div>', unsafe_allow_html=True)
+    st.info(f"📍 {gekozen}")
+    try:
+        with st.spinner("Bezig met ophalen..."):
+            # Geef het exacte gevonden adres mee — dan hoeft het script niet te zoeken
+            # en wordt input() nooit aangeroepen
+            data = run_met_capture(haal_data_voor_adres, gekozen)
+    except Exception as e:
+        st.error(f"❌ Fout: {e}"); st.stop()
+    st.markdown("---")
+    st.markdown('<div class="stap-label">Stap 3 — Gevonden gegevens</div>', unsafe_allow_html=True)
+    toon_resultaten(data)
+    toon_download(data, gekozen.split(",")[0])
     else:
         st.warning("⚠️ Vul eerst een adres in.")
