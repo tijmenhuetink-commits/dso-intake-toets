@@ -328,21 +328,30 @@ if zoek_knop:
             toon_resultaten(data)
             toon_download(data, gekozen.split(",")[0])
         else:
-            # Keuzemenu
-            st.markdown('<div class="stap-label">Meerdere adressen gevonden — kies er één</div>', unsafe_allow_html=True)
-            namen = [d.get("weergavenaam","?") for d in kandidaten]
-            keuze = st.radio("Kies het juiste adres:", namen, key="adres_keuze")
-            if st.button("✓ Dit adres gebruiken"):
-                st.markdown('<div class="stap-label">Stap 2 — Data ophalen via DSO API</div>', unsafe_allow_html=True)
-                st.info(f"📍 {keuze}")
-                try:
-                    with st.spinner("Bezig met ophalen..."):
-                        data = run_met_capture(haal_data_voor_adres, keuze)
-                except Exception as e:
-                    st.error(f"❌ Fout: {e}"); st.stop()
-                st.markdown("---")
-                st.markdown('<div class="stap-label">Stap 3 — Gevonden gegevens</div>', unsafe_allow_html=True)
-                toon_resultaten(data)
-                toon_download(data, keuze.split(",")[0])
+            # Keuzemenu — sla kandidaten op in session_state
+            st.session_state["kandidaten"] = kandidaten
+            st.session_state["toon_keuze"] = True
+
+# Keuzemenu tonen (buiten de zoek_knop block zodat het na herrender blijft staan)
+if st.session_state.get("toon_keuze") and st.session_state.get("kandidaten"):
+    kandidaten = st.session_state["kandidaten"]
+    st.markdown("---")
+    st.markdown('<div class="stap-label">Meerdere adressen gevonden — kies er één</div>', unsafe_allow_html=True)
+    namen = [d.get("weergavenaam","?") for d in kandidaten]
+    keuze = st.radio("Kies het juiste adres:", namen, key="adres_keuze")
+    if st.button("✓ Dit adres gebruiken"):
+        st.session_state["toon_keuze"] = False
+        st.session_state["kandidaten"] = []
+        st.markdown('<div class="stap-label">Stap 2 — Data ophalen via DSO API</div>', unsafe_allow_html=True)
+        st.info(f"📍 {keuze}")
+        try:
+            with st.spinner("Bezig met ophalen..."):
+                data = run_met_capture(haal_data_voor_adres, keuze)
+        except Exception as e:
+            st.error(f"❌ Fout: {e}"); st.stop()
+        st.markdown("---")
+        st.markdown('<div class="stap-label">Stap 3 — Gevonden gegevens</div>', unsafe_allow_html=True)
+        toon_resultaten(data)
+        toon_download(data, keuze.split(",")[0])
     else:
         st.warning("⚠️ Vul eerst een adres in.")
