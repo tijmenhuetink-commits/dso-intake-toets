@@ -14,7 +14,7 @@ import importlib.util as _ilu
 
 _echte_input = builtins.input
 def _web_input(prompt=""):
-    print(prompt + "1  ← automatisch gekozen")
+    # Stille keuze — geen output naar terminal
     return "1"
 
 def _laad(naam):
