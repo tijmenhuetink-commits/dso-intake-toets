@@ -131,12 +131,10 @@ def adres_naar_xy(doc):
 
 def run_en_toon(fn, *args):
     """Voert fn uit, slaat terminal output op in session_state, geeft resultaat terug."""
-    ph = st.empty()
     class Live(io.StringIO):
         def write(self, t):
             super().write(t)
             st.session_state.terminal_log = self.getvalue()
-            ph.markdown(f'<div class="terminal">{self.getvalue()}</div>', unsafe_allow_html=True)
             return len(t)
     live = Live()
     old_out = sys.stdout; sys.stdout = live
@@ -171,8 +169,15 @@ def toon_resultaten(data):
         st.markdown(kaart("Dubbelbestemming",   ", ".join(d["naam"] for d in data.get("dubbelbestemmingen",[])) or "geen"), unsafe_allow_html=True)
     if data.get("maatvoeringen"):
         st.markdown('<div class="sectie-header">Maatvoeringen</div>', unsafe_allow_html=True)
+        # Dedupliceer op naam — behoud eerste unieke waarde per naam
+        gezien = {}
+        for m in data["maatvoeringen"]:
+            naam = m["naam"]
+            if naam not in gezien:
+                gezien[naam] = m
+        uniek = list(gezien.values())
         cols = st.columns(3)
-        for i, m in enumerate(data["maatvoeringen"]):
+        for i, m in enumerate(uniek):
             with cols[i % 3]:
                 st.markdown(kaart(m["naam"], f"{m['waarde']} {m.get('eenheid','')}".strip()), unsafe_allow_html=True)
 
