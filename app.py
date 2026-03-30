@@ -93,13 +93,12 @@ st.markdown(
 st.markdown("---")
 
 # ── Session state initialiseren ───────────────────────────────────────────────
-for k, v in {"fase": "invoer", "kandidaten": [], "gekozen": None, "data": None, "terminal_log": ""}.items():
+for k, v in {"fase": "invoer", "kandidaten": [], "gekozen": None, "data": None}.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
 # ── Hulpfuncties ──────────────────────────────────────────────────────────────
 def zoek_adressen(adres_str):
-    """Geeft lijst van dicts terug met weergavenaam + rd-coördinaten."""
     params = {"q": adres_str, "fq": "type:adres", "rows": 100, "fl": "id,weergavenaam,centroide_rd"}
     r = _req.get(f"{LS_BASE}/free", params=params, timeout=10)
     r.raise_for_status()
@@ -122,27 +121,27 @@ def zoek_adressen(adres_str):
             gezien.add(n); res.append(d)
     return res if res else docs[:5]
 
-def adres_naar_xy(doc):
-    """Haal RD-coördinaten op uit een PDOK doc dict."""
-    rd = doc.get("centroide_rd", "").replace("POINT(", "").replace(")", "").split()
-    if len(rd) == 2:
-        return float(rd[0]), float(rd[1])
-    return None, None
-
 def run_en_toon(fn, *args):
-    """Voert fn uit, slaat terminal output op in session_state, geeft resultaat terug."""
-    class Live(io.StringIO):
-        def write(self, t):
-            super().write(t)
-            st.session_state.terminal_log = self.getvalue()
-            return len(t)
-    live = Live()
-    old_out = sys.stdout; sys.stdout = live
-    builtins.input = _web_input
-    try:
-        return fn(*args)
-    finally:
-        sys.stdout = old_out; builtins.input = _echte_input
+    """Voert fn uit via st.status() — klapt in na afloop, geen oude output."""
+    with st.status("⏳ Data ophalen via DSO API...", expanded=True) as status:
+        ph = st.empty()
+        class Live(io.StringIO):
+            def write(self, t):
+                super().write(t)
+                ph.markdown(f'<div class="terminal">{self.getvalue()}</div>', unsafe_allow_html=True)
+                return len(t)
+        live = Live()
+        old_out = sys.stdout; sys.stdout = live
+        builtins.input = _web_input
+        try:
+            resultaat = fn(*args)
+            status.update(label="✅ Data opgehaald", state="complete", expanded=False)
+            return resultaat
+        except Exception as e:
+            status.update(label=f"❌ Fout: {e}", state="error", expanded=True)
+            raise
+        finally:
+            sys.stdout = old_out; builtins.input = _echte_input
 
 def kaart(label, waarde):
     heeft = waarde and waarde not in ("—", "geen", "")
@@ -169,15 +168,8 @@ def toon_resultaten(data):
         st.markdown(kaart("Dubbelbestemming",   ", ".join(d["naam"] for d in data.get("dubbelbestemmingen",[])) or "geen"), unsafe_allow_html=True)
     if data.get("maatvoeringen"):
         st.markdown('<div class="sectie-header">Maatvoeringen</div>', unsafe_allow_html=True)
-        # Dedupliceer op naam — behoud eerste unieke waarde per naam
-        gezien = {}
-        for m in data["maatvoeringen"]:
-            naam = m["naam"]
-            if naam not in gezien:
-                gezien[naam] = m
-        uniek = list(gezien.values())
         cols = st.columns(3)
-        for i, m in enumerate(uniek):
+        for i, m in enumerate(data["maatvoeringen"]):
             with cols[i % 3]:
                 st.markdown(kaart(m["naam"], f"{m['waarde']} {m.get('eenheid','')}".strip()), unsafe_allow_html=True)
 
@@ -259,24 +251,19 @@ if zoek_knop:
             st.error(f"❌ Geen adressen gevonden voor '{adres_input}'")
             st.session_state.fase = "invoer"
         elif len(kandidaten) == 1:
-            # Directe match — haal coördinaten op en sla op
+            # Directe match — meteen ophalen
             gekozen = kandidaten[0].get("weergavenaam", adres_input)
-            x, y = adres_naar_xy(kandidaten[0])
             st.info(f"📍 {gekozen}")
             try:
                 with st.spinner("Bezig..."):
-                    data = run_en_toon(haal_data_voor_coordinaten, x, y)
-                data["adres_gevonden"] = gekozen
+                    data = run_en_toon(haal_data_voor_adres, gekozen)
                 st.session_state.data = data
                 st.session_state.fase = "resultaat"
             except Exception as e:
                 st.error(f"❌ {e}"); st.stop()
         else:
-            # Meerdere kandidaten → keuzemenu, sla naam + coördinaten op
-            st.session_state.kandidaten = [
-                {"naam": d.get("weergavenaam","?"), "xy": adres_naar_xy(d)}
-                for d in kandidaten
-            ]
+            # Meerdere kandidaten → keuzemenu
+            st.session_state.kandidaten = [d.get("weergavenaam","?") for d in kandidaten]
             st.session_state.fase = "keuze"
             st.rerun()
     else:
@@ -287,12 +274,9 @@ if zoek_knop:
 elif st.session_state.fase == "keuze" and st.session_state.kandidaten:
     st.markdown("---")
     st.markdown('<div class="stap-label">Meerdere adressen gevonden — kies er één</div>', unsafe_allow_html=True)
-    namen = [k["naam"] for k in st.session_state.kandidaten]
-    keuze_naam = st.radio("Kies het juiste adres:", namen, key="adres_keuze")
+    keuze = st.radio("Kies het juiste adres:", st.session_state.kandidaten, key="adres_keuze")
     if st.button("✓ Dit adres gebruiken"):
-        # Zoek de bijbehorende coördinaten op
-        gekozen_item = next(k for k in st.session_state.kandidaten if k["naam"] == keuze_naam)
-        st.session_state.gekozen = gekozen_item
+        st.session_state.gekozen = keuze
         st.session_state.fase    = "ophalen"
         st.rerun()
 
@@ -300,13 +284,10 @@ elif st.session_state.fase == "keuze" and st.session_state.kandidaten:
 elif st.session_state.fase == "ophalen" and st.session_state.gekozen:
     st.markdown("---")
     gekozen = st.session_state.gekozen
-    naam = gekozen["naam"]
-    x, y = gekozen["xy"]
-    st.info(f"📍 {naam}")
+    st.info(f"📍 {gekozen}")
     try:
         with st.spinner("Bezig..."):
-            data = run_en_toon(haal_data_voor_coordinaten, x, y)
-        data["adres_gevonden"] = naam
+            data = run_en_toon(haal_data_voor_adres, gekozen)
         st.session_state.data = data
         st.session_state.fase = "resultaat"
     except Exception as e:
@@ -316,10 +297,6 @@ elif st.session_state.fase == "ophalen" and st.session_state.gekozen:
 if st.session_state.fase == "resultaat" and st.session_state.data:
     data  = st.session_state.data
     label = (data.get("adres_gevonden") or data.get("adres","locatie")).split(",")[0]
-    # Toon alleen de terminal log van de laatste run
-    if st.session_state.get("terminal_log"):
-        st.markdown('<div class="stap-label">Stap 2 — Data ophalen via DSO API</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="terminal">{st.session_state.terminal_log}</div>', unsafe_allow_html=True)
     toon_resultaten(data)
     toon_download(data, label)
     if st.button("🔄 Nieuw adres opzoeken"):
