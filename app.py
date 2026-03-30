@@ -260,6 +260,7 @@ if zoek_knop:
             # Meerdere kandidaten → keuzemenu
             st.session_state.kandidaten = [d.get("weergavenaam","?") for d in kandidaten]
             st.session_state.fase = "keuze"
+            st.rerun()
     else:
         st.warning("⚠️ Vul eerst een adres in.")
         st.session_state.fase = "invoer"
