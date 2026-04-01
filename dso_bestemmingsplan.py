@@ -1,8 +1,8 @@
 """
 DSO Bestemmingsplan Data Ophaler
 ================================
-Versie : 3.3
-Datum  : 2026-03-20
+Versie : 3.4
+Datum  : 2026-04-02
 Wijzigingen:
   v0.1 — eerste versie
   v0.2 — Accept header gewijzigd naar application/hal+json
@@ -53,6 +53,9 @@ Wijzigingen:
           vlag "niet_gedigitaliseerd: True" in JSON-output voor Word-generator
   v3.3 — paraplu-keywords uitgebreid: terrasregels, terrassen, detailhandel, TAM-omgevingsplan
           keuzemenu bij geen exacte adresMatch (was: stilletjes docs[0] kiezen)
+  v3.4 — paraplu-keywords uitgebreid met omgevingsvisies en nationale programma's
+          (Nationaal Water Programma, Programma Noordzee, Omgevingsvisie, etc.)
+          die door de API worden teruggegeven als bestemmingsplan maar dat niet zijn
 
 Haalt automatisch bestemmingsplandata op voor een opgegeven adres.
 
@@ -80,7 +83,7 @@ import requests
 import json
 import sys
 
-VERSION = "3.3"
+VERSION = "3.4"
 
 # ─────────────────────────────────────────────
 # CONFIGURATIE — pas hier je API-key aan
@@ -275,6 +278,11 @@ def is_parapluplan(plan: dict) -> bool:
         "TAM-omgevingsplan", "tam-omgevingsplan",
         # Procedurele plannen
         "voorbereidingsbesluit", "herziening",
+        # Omgevingsvisies en nationale/provinciale programma's — geen bestemmingsplan
+        "omgevingsvisie", "nationaal water programma", "programma noordzee",
+        "bodem- en waterprogramma", "nationale omgevingsvisie",
+        "omgevingsprogramma", "omgevingsagenda", "structuurvisie",
+        "programma ", "water programma",
     ]
     return any(kw in naam_lower for kw in keywords)
 
