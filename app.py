@@ -93,7 +93,7 @@ st.markdown(
 st.markdown("---")
 
 # ── Session state initialiseren ───────────────────────────────────────────────
-for k, v in {"fase": "invoer", "kandidaten": [], "gekozen": None, "data": None}.items():
+for k, v in {"fase": "invoer", "kandidaten": [], "gekozen": None, "data": None, "terminal_log": "", "docx_cache": None}.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -122,21 +122,16 @@ def zoek_adressen(adres_str):
     return res if res else docs[:5]
 
 def run_en_toon(fn, *args):
-    """Voert fn uit, toont live terminal output, geeft resultaat terug."""
-    st.markdown('<div class="stap-label">Stap 2 — Data ophalen via DSO API</div>', unsafe_allow_html=True)
-    ph = st.empty()
-    class Live(io.StringIO):
-        def write(self, t):
-            super().write(t)
-            ph.markdown(f'<div class="terminal">{self.getvalue()}</div>', unsafe_allow_html=True)
-            return len(t)
-    live = Live()
-    old = sys.stdout; sys.stdout = live
+    """Voert fn uit, slaat stdout op in session_state.terminal_log."""
+    buf = io.StringIO()
+    old_out = sys.stdout; sys.stdout = buf
     builtins.input = _web_input
     try:
-        return fn(*args)
+        resultaat = fn(*args)
+        st.session_state.terminal_log = buf.getvalue()
+        return resultaat
     finally:
-        sys.stdout = old; builtins.input = _echte_input
+        sys.stdout = old_out; builtins.input = _echte_input
 
 def kaart(label, waarde):
     heeft = waarde and waarde not in ("—", "geen", "")
@@ -171,14 +166,17 @@ def toon_resultaten(data):
 def toon_download(data, label):
     st.markdown("---")
     st.markdown('<div class="stap-label">Stap 4 — Download Word-document</div>', unsafe_allow_html=True)
-    with st.spinner("Word-document genereren..."):
-        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
-            tmp_pad = tmp.name
-        genereer_intake_toets(data, uitvoer_pad=tmp_pad)
-        with open(tmp_pad, "rb") as f: docx_bytes = f.read()
-        os.unlink(tmp_pad)
+    if st.session_state.docx_cache is None:
+        with st.spinner("Word-document genereren..."):
+            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+                tmp_pad = tmp.name
+            genereer_intake_toets(data, uitvoer_pad=tmp_pad)
+            with open(tmp_pad, "rb") as f:
+                st.session_state.docx_cache = f.read()
+            os.unlink(tmp_pad)
     naam = f"Intake_toets_{label.replace(' ','_')[:25]}_{date.today().strftime('%Y%m%d')}.docx"
-    st.download_button("📄  Download Intake Toets (.docx)", data=docx_bytes, file_name=naam,
+    st.download_button("📄  Download Intake Toets (.docx)",
+        data=st.session_state.docx_cache, file_name=naam,
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     st.success(f"✅ Klaar! Klik op de knop om **{naam}** te downloaden.")
 
@@ -219,10 +217,12 @@ else:
 
 # ── Nieuwe zoekopdracht → reset alles ────────────────────────────────────────
 if zoek_knop:
-    st.session_state.fase      = "zoeken"
-    st.session_state.kandidaten = []
-    st.session_state.gekozen   = None
-    st.session_state.data      = None
+    st.session_state.fase        = "zoeken"
+    st.session_state.kandidaten  = []
+    st.session_state.gekozen     = None
+    st.session_state.data        = None
+    st.session_state.terminal_log = ""
+    st.session_state.docx_cache  = None
     st.markdown("---")
 
     # Coördinaten: direct ophalen
@@ -292,6 +292,9 @@ elif st.session_state.fase == "ophalen" and st.session_state.gekozen:
 if st.session_state.fase == "resultaat" and st.session_state.data:
     data  = st.session_state.data
     label = (data.get("adres_gevonden") or data.get("adres","locatie")).split(",")[0]
+    st.markdown('<div class="stap-label">Stap 2 — Data ophalen via DSO API</div>', unsafe_allow_html=True)
+    if st.session_state.get("terminal_log"):
+        st.markdown(f'<div class="terminal">{st.session_state.terminal_log}</div>', unsafe_allow_html=True)
     toon_resultaten(data)
     toon_download(data, label)
     if st.button("🔄 Nieuw adres opzoeken"):
