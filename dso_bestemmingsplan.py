@@ -1,8 +1,8 @@
 """
 DSO Bestemmingsplan Data Ophaler
 ================================
-Versie : 3.4
-Datum  : 2026-04-02
+Versie : 3.9
+Datum  : 2026-04-03
 Wijzigingen:
   v0.1 — eerste versie
   v0.2 — Accept header gewijzigd naar application/hal+json
@@ -53,9 +53,18 @@ Wijzigingen:
           vlag "niet_gedigitaliseerd: True" in JSON-output voor Word-generator
   v3.3 — paraplu-keywords uitgebreid: terrasregels, terrassen, detailhandel, TAM-omgevingsplan
           keuzemenu bij geen exacte adresMatch (was: stilletjes docs[0] kiezen)
-  v3.4 — paraplu-keywords uitgebreid met omgevingsvisies en nationale programma's
-          (Nationaal Water Programma, Programma Noordzee, Omgevingsvisie, etc.)
-          die door de API worden teruggegeven als bestemmingsplan maar dat niet zijn
+  v3.5 — pageSize verhoogd van 10 naar 50 in haal_bestemmingsplan()
+          zodat gemeentelijke bestemmingsplannen niet verdrongen worden door rijks/provinciale plannen
+          (deze plannen vullen nu de eerste posities in de API-resultaten)
+  v3.6 — is_parapluplan() uitgebreid met gemeentecode-detectie via plan-ID
+  v3.7 — output opgeschoond: alleen relevante plannen getoond, paraplu/rijks/provinciale weggelaten
+  v3.8 — is_gemeentelijk_plan() ondersteunt nu ook oud IMRO2006 formaat (NL.IMRO.NNNNXXXX)
+          zodat bijv. Fokkesteeg-Merwestein 2009 correct als gemeentelijk plan herkend wordt
+  v3.9 — beheersverordeningen herkend aan plan-ID (BV na gemeentecode)
+          worden nu gefilterd als paraplu zodat het echte bestemmingsplan direct gekozen wordt
+          rijks/provinciale plannen (NL.IMRO.0000.*) automatisch gefilterd
+          extra keywords: omgevingsvisie, structuurvisie, geitenhouderij etc.
+          resultaat: script werkt weer snel zonder lange fallback-keten
 
 Haalt automatisch bestemmingsplandata op voor een opgegeven adres.
 
@@ -83,7 +92,7 @@ import requests
 import json
 import sys
 
-VERSION = "3.4"
+VERSION = "3.9"
 
 # ─────────────────────────────────────────────
 # CONFIGURATIE — pas hier je API-key aan
@@ -260,9 +269,28 @@ def adres_naar_rd(adres: str) -> dict:
 # STAP 2 — Vigerend bestemmingsplan ophalen
 # ─────────────────────────────────────────────
 
+def is_gemeentelijk_plan(plan: dict) -> bool:
+    """Geeft True als het plan een gemeentelijk plan is op basis van het plan-ID.
+    Twee formaten:
+    - Nieuw (IMRO2012): NL.IMRO.NNNN.* waar NNNN een 4-cijferige gemeentecode is
+    - Oud  (IMRO2006):  NL.IMRO.NNNNXXXX* waarbij de eerste 4 cijfers de gemeentecode zijn
+    Rijksplannen hebben code "0000", provinciale plannen hebben geen gemeentecode."""
+    plan_id = plan.get("id", "")
+    if not plan_id.startswith("NL.IMRO."):
+        return False
+    rest = plan_id[len("NL.IMRO."):]  # bijv. "0356.BVFM2018-OH02" of "03560000BPFM2008-"
+    # Haal de eerste 4 cijfers op als gemeentecode
+    gemeentecode = rest[:4]
+    if not gemeentecode.isdigit():
+        return False
+    # Rijksplannen hebben code "0000"
+    return gemeentecode != "0000"
+
+
 def is_parapluplan(plan: dict) -> bool:
     """Geeft True als het plan officieel een parapluplan is (via isParapluplan veld),
-    of als de naam typische paraplu-keywords bevat als fallback."""
+    of als de naam typische paraplu-keywords bevat als fallback,
+    of als het een rijks/provinciaal plan is (geen gemeentelijk bestemmingsplan)."""
     if plan.get("isParapluplan") is True:
         return True
     naam_lower = plan.get("naam", "").lower()
@@ -278,13 +306,28 @@ def is_parapluplan(plan: dict) -> bool:
         "TAM-omgevingsplan", "tam-omgevingsplan",
         # Procedurele plannen
         "voorbereidingsbesluit", "herziening",
-        # Omgevingsvisies en nationale/provinciale programma's — geen bestemmingsplan
-        "omgevingsvisie", "nationaal water programma", "programma noordzee",
-        "bodem- en waterprogramma", "nationale omgevingsvisie",
-        "omgevingsprogramma", "omgevingsagenda", "structuurvisie",
-        "programma ", "water programma",
+        # Rijks- en provinciale plannen — geen gemeentelijk bestemmingsplan
+        "omgevingsvisie", "structuurvisie", "nationaal water programma",
+        "programma noordzee", "bodem- en waterprogramma",
+        "nationale omgevingsvisie", "omgevingsprogramma",
+        "bodem-, water- en milieuplan", "thematische structuurvisie",
+        "provinciale ruimtelijke structuurvisie",
+        "structuurvisie infrastructuur", "structuurvisie windenergie",
+        "structuurvisie ondergrond", "structuurvisie buisleidingen",
+        "geitenhouderij",  # geen gemeentelijk bestemmingsplan voor stedelijk gebied
     ]
-    return any(kw in naam_lower for kw in keywords)
+    if any(kw in naam_lower for kw in keywords):
+        return True
+    # Beheersverordening herkennen aan plan-ID (BV na gemeentecode)
+    plan_id = plan.get("id", "")
+    if plan_id.startswith("NL.IMRO."):
+        rest = plan_id[len("NL.IMRO."):]          # bijv. "0356.BVFM2018-OH02"
+        na_gemeente = rest[4:].lstrip(".").upper() # bijv. "BVFM2018-OH02"
+        if na_gemeente.startswith("BV") or "BEHEERS" in na_gemeente:
+            return True  # beheersverordening, niet als moederplan gebruiken
+
+    # Geen gemeentelijk plan = behandel als paraplu/niet-relevant
+    return not is_gemeentelijk_plan(plan)
 
 
 def haal_bestemmingsplan(x: float, y: float) -> dict | None:
@@ -303,7 +346,7 @@ def haal_bestemmingsplan(x: float, y: float) -> dict | None:
         "planType": "bestemmingsplan",
         "planStatus": "vigerend",
         "page": 0,
-        "pageSize": 10,   # meer ophalen zodat we kunnen filteren
+        "pageSize": 50,   # meer ophalen zodat rijks/provinciale plannen gemeentelijke niet verdringen
     }
     body = {
         "_geo": {
@@ -326,11 +369,14 @@ def haal_bestemmingsplan(x: float, y: float) -> dict | None:
         print("  ⚠ Geen vigerend bestemmingsplan gevonden op deze locatie.")
         return None
 
-    # Toon alle gevonden plannen
-    print(f"  {len(plannen)} plan(nen) gevonden op deze locatie:")
-    for p in plannen:
-        tag = " [paraplu]" if is_parapluplan(p) else ""
-        print(f"    • {p.get('naam','?')} ({p.get('datum','?')}){tag}")
+    # Toon alleen relevante (niet-paraplu) plannen
+    relevante = [p for p in plannen if not is_parapluplan(p)]
+    paraplu   = [p for p in plannen if is_parapluplan(p)]
+    print(f"  {len(plannen)} plan(nen) gevonden, {len(relevante)} relevant(e):")
+    for p in relevante:
+        print(f"    • {p.get('naam','?')} ({p.get('datum','?')})")
+    if paraplu:
+        print(f"  ({len(paraplu)} paraplu/rijks/provinciale plannen weggelaten)")
 
     # Filter: houd alleen niet-parapluplannen over
     moederplannen = [p for p in plannen if not is_parapluplan(p)]
