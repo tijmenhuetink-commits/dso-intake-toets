@@ -1,12 +1,14 @@
 """
 DSO Intake Toets Generator
 ===========================
-Versie : 3.0
+Versie : 3.1
 Datum  : 2026-09-03
 Wijzigingen:
   v1.0 — eerste versie, Word-document gegenereerd vanuit DSO JSON-data
   v2.0 — niet-gedigitaliseerde plannen netjes afgehandeld
-  v3.0 — volledig nieuw: gebaseerd op officieel ODU-sjabloon (Intaketoets.docx)
+  v3.0 — volledig nieuw: gebaseerd op officieel ODU-sjabloon
+  v3.1 — voorbereidingsbesluit-filter: alleen echte VB-plannen tonen op basis van plan-ID
+          oranje tekst voor automatisch ingevulde DSO-velden (Intaketoets.docx)
           exact dezelfde opmaak als het sjabloon, geen kleurcoderingen
           DSO-velden automatisch ingevuld op de juiste plekken
           Toets Omgevingsplan tekst automatisch samengesteld
@@ -27,7 +29,7 @@ Benodigdheden:
   pip install requests python-docx
 """
 
-VERSION = "3.0"
+VERSION = "3.1"
 
 import sys
 import os
@@ -38,6 +40,7 @@ from datetime import date
 from docx import Document
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from docx.shared import RGBColor
 
 
 # ─────────────────────────────────────────────
@@ -76,6 +79,24 @@ else:
 # HULPFUNCTIES
 # ─────────────────────────────────────────────
 
+def is_gemeentelijk_plan_id(plan_id):
+    """Check of plan-ID een gemeentelijk plan is (niet rijks/provinciaal)."""
+    if not plan_id.startswith("NL.IMRO."):
+        return False
+    rest = plan_id[len("NL.IMRO."):]
+    gemeentecode = rest[:4]
+    return gemeentecode.isdigit() and gemeentecode != "0000"
+
+
+def is_echt_vbb(plan):
+    """Check of een plan echt een voorbereidingsbesluit is op basis van plan-ID."""
+    plan_id = plan.get("id", "")
+    if not plan_id.startswith("NL.IMRO."):
+        return False
+    rest = plan_id[len("NL.IMRO."):][4:].lstrip(".").upper()
+    return rest.startswith("VB") or rest.startswith("VRO") or "VROBB" in rest
+
+
 def para_tekst(para):
     """Geeft de volledige tekst van een paragraaf terug."""
     return ''.join(r.text or '' for r in para._p.iter(qn('w:t')))
@@ -95,10 +116,15 @@ def zoek_cel_naast(doc, zoektekst):
     return None
 
 
-def vul_cel(cel, tekst, hyperlink_url=None):
+# Donker oranje kleur voor automatisch ingevulde DSO-velden
+ORANJE = RGBColor(0xC0, 0x50, 0x00)  # donker oranje
+
+
+def vul_cel(cel, tekst, hyperlink_url=None, oranje=False):
     """
     Vult een tabelcel met tekst, behoudt bestaande opmaak.
     Als hyperlink_url opgegeven, maakt een klikbare link.
+    Als oranje=True, wordt de tekst donker oranje (automatisch ingevuld via DSO).
     """
     if cel is None:
         return
@@ -118,10 +144,11 @@ def vul_cel(cel, tekst, hyperlink_url=None):
     para = cel.paragraphs[0]
 
     if hyperlink_url:
-        # Maak klikbare hyperlink
         _voeg_hyperlink_toe(para, tekst, hyperlink_url)
     else:
         run = para.add_run(tekst)
+        if oranje:
+            run.font.color.rgb = ORANJE
         # Kopieer opmaak van eventueel eerste bestaande run
         if len(para.runs) > 1:
             eerste = para.runs[0]
@@ -238,6 +265,7 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
     planenoverzicht = data.get("planenoverzicht", {})
     vbb_str = ", ".join(
         p.get("naam", "—") for p in planenoverzicht.get("voorbereidingsbesluit", [])
+        if is_echt_vbb(p) and is_gemeentelijk_plan_id(p.get("id", ""))
     ) or "—"
     parkeer_str = "—"
     for p in planenoverzicht.get("bestemmingsplan", []):
@@ -253,7 +281,7 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
 
     # Locatie: Straatnaam + huisnummer
     cel = zoek_cel_naast(doc, "Straatnaam + huisnummer")
-    vul_cel(cel, straat_hnr)
+    vul_cel(cel, straat_hnr, oranje=True)
 
     # Hyperlink regels op de kaart
     cel = zoek_cel_naast(doc, "Hyperlink regels op de kaart")
@@ -267,19 +295,19 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
 
     # Bestemmingsplan
     cel = zoek_cel_naast(doc, "Bestemmingsplan")
-    vul_cel(cel, f"{bp_naam}" + (f" ({bp_datum})" if bp_datum and bp_datum != "—" else ""))
+    vul_cel(cel, f"{bp_naam}" + (f" ({bp_datum})" if bp_datum and bp_datum != "—" else ""), oranje=True)
 
     # Bestemming perceel
     cel = zoek_cel_naast(doc, "Bestemming perceel")
-    vul_cel(cel, bestemming if not niet_gedig else "zie hyperlink plan")
+    vul_cel(cel, bestemming if not niet_gedig else "zie hyperlink plan", oranje=True)
 
     # Dubbelbestemming
     cel = zoek_cel_naast(doc, "Dubbelbestemming")
-    vul_cel(cel, dubbel_str if not niet_gedig else "zie hyperlink plan")
+    vul_cel(cel, dubbel_str if not niet_gedig else "zie hyperlink plan", oranje=True)
 
     # (Functie)aanduiding
     cel = zoek_cel_naast(doc, "(Functie)aanduiding")
-    vul_cel(cel, functie_str if not niet_gedig else "zie hyperlink plan")
+    vul_cel(cel, functie_str if not niet_gedig else "zie hyperlink plan", oranje=True)
 
     # Voorbereidingsbesluit
     cel = zoek_cel_naast(doc, "Voorbereidingsbesluit")
@@ -291,15 +319,15 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
 
     # Bebouwde oppervlakte
     cel = zoek_cel_naast(doc, "Bebouwde oppervlakte bouwperceel")
-    vul_cel(cel, opp if opp != "—" else "niet opgenomen in plan")
+    vul_cel(cel, opp if opp != "—" else "niet opgenomen in plan", oranje=True)
 
     # Maximale bouwhoogte
     cel = zoek_cel_naast(doc, "Maximale bouwhoogte")
-    vul_cel(cel, bouwhoogte if bouwhoogte != "—" else "niet opgenomen in plan")
+    vul_cel(cel, bouwhoogte if bouwhoogte != "—" else "niet opgenomen in plan", oranje=True)
 
     # Maximale goothoogte
     cel = zoek_cel_naast(doc, "Maximale goothoogte")
-    vul_cel(cel, goothoogte if goothoogte != "—" else "niet opgenomen in plan")
+    vul_cel(cel, goothoogte if goothoogte != "—" else "niet opgenomen in plan", oranje=True)
 
     # ── Toets Omgevingsplan tekst ─────────────────────────────────────────────
     # Zoek de paragraaf met <GLOBALE LOCATIE>
