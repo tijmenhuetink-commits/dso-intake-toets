@@ -77,12 +77,14 @@ html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 #MainMenu, footer, header { visibility:hidden; }
 
 /* Radio buttons leesbaar op donkere achtergrond */
-.stRadio > div > label > div > p { color: #e6edf3 !important; }
-.stRadio > div > label { color: #e6edf3 !important; }
+.stRadio label { color: #e6edf3 !important; }
+.stRadio label p { color: #e6edf3 !important; }
+.stRadio span { color: #e6edf3 !important; }
+[data-testid="stRadio"] label { color: #e6edf3 !important; }
+[data-testid="stRadio"] p { color: #e6edf3 !important; }
 
 /* Scrollbar altijd zichtbaar */
 html { overflow-y: scroll !important; }
-section.main > div { overflow-y: auto !important; }
 </style>
 """, unsafe_allow_html=True)
 
