@@ -1,7 +1,7 @@
 """
 DSO Intake Toets Generator
 ===========================
-Versie : 3.5
+Versie : 3.6
 Datum  : 2026-09-03
 Wijzigingen:
   v1.0 — eerste versie, Word-document gegenereerd vanuit DSO JSON-data
@@ -13,6 +13,7 @@ Wijzigingen:
   v3.3 — maatvoeringen gededupliceerd; hyperlink/omgevingsplan-cel fix
   v3.4 — gebiedsaanduidingen gescheiden met puntkomma en zachte enter per regel
   v3.5 — functieaanduidingen ook gescheiden met puntkomma en zachte enter per regel
+  v3.6 — hyperlink Regels op de kaart dynamisch met coördinaten en plan-ID
           gebiedsaanduidingen ingevuld als kommalijst
           sjabloon bijgewerkt naar Intaketoets.docx (Intaketoets.docx)
           exact dezelfde opmaak als het sjabloon, geen kleurcoderingen
@@ -35,7 +36,7 @@ Benodigdheden:
   pip install requests python-docx
 """
 
-VERSION = "3.5"
+VERSION = "3.6"
 
 import sys
 import os
@@ -321,13 +322,21 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
     cel = zoek_cel_naast(doc, "RD-coördinaten (ingevoerd)")
     vul_cel(cel, coord_str, oranje=True)
 
-    # Hyperlink regels op de kaart — zoek specifiek in tabel 6 (Omgevingsplan informatie)
+    # Hyperlink regels op de kaart — dynamisch met coördinaten
+    plan_id_url = data.get("hyperlink", "")
+    plan_id_deel = plan_id_url.split("planidn=")[-1] if "planidn=" in plan_id_url else ""
+    if plan_id_deel and coord_x and coord_y:
+        rotk_url = (
+            f"https://omgevingswet.overheid.nl/regels-op-de-kaart/documenten/{plan_id_deel}"
+            f"/plekinfo?locatie-stelsel=RD&locatie-x={coord_x}&locatie-y={coord_y}"
+        )
+    else:
+        rotk_url = "https://omgevingswet.overheid.nl/regels-op-de-kaart/zoeken/locatie"
     for tbl in doc.tables:
         for rij in tbl.rows:
             if "Hyperlink regels op de kaart" in rij.cells[0].text:
                 if len(rij.cells) > 1:
-                    vul_cel(rij.cells[1], "Link",
-                        hyperlink_url="https://omgevingswet.overheid.nl/regels-op-de-kaart/zoeken/locatie")
+                    vul_cel(rij.cells[1], "Link", hyperlink_url=rotk_url)
                 break
 
     # Omgevingsplan — zoek alleen de rij die direct na "Hyperlink regels op de kaart" staat
