@@ -1,7 +1,7 @@
 """
 DSO Intake Toets Generator
 ===========================
-Versie : 3.3
+Versie : 3.4
 Datum  : 2026-09-03
 Wijzigingen:
   v1.0 — eerste versie, Word-document gegenereerd vanuit DSO JSON-data
@@ -11,6 +11,7 @@ Wijzigingen:
           oranje tekst voor automatisch ingevulde DSO-velden
   v3.2 — RD-coördinaten ingevuld in Locatie-tabel
   v3.3 — maatvoeringen gededupliceerd; hyperlink/omgevingsplan-cel fix
+  v3.4 — gebiedsaanduidingen gescheiden met puntkomma en zachte enter per regel
           gebiedsaanduidingen ingevuld als kommalijst
           sjabloon bijgewerkt naar Intaketoets.docx (Intaketoets.docx)
           exact dezelfde opmaak als het sjabloon, geen kleurcoderingen
@@ -33,7 +34,7 @@ Benodigdheden:
   pip install requests python-docx
 """
 
-VERSION = "3.3"
+VERSION = "3.4"
 
 import sys
 import os
@@ -129,6 +130,7 @@ def vul_cel(cel, tekst, hyperlink_url=None, oranje=False):
     Vult een tabelcel met tekst, behoudt bestaande opmaak.
     Als hyperlink_url opgegeven, maakt een klikbare link.
     Als oranje=True, wordt de tekst donker oranje (automatisch ingevuld via DSO).
+    Tekst met \n wordt gesplitst over meerdere regels binnen de cel (zachte enter).
     """
     if cel is None:
         return
@@ -137,7 +139,6 @@ def vul_cel(cel, tekst, hyperlink_url=None, oranje=False):
     for para in cel.paragraphs:
         for run in para.runs:
             run.text = ''
-        # Verwijder eventuele hyperlinks
         for child in list(para._p):
             if child.tag == qn('w:hyperlink'):
                 para._p.remove(child)
@@ -149,11 +150,21 @@ def vul_cel(cel, tekst, hyperlink_url=None, oranje=False):
 
     if hyperlink_url:
         _voeg_hyperlink_toe(para, tekst, hyperlink_url)
+    elif "\n" in tekst:
+        # Meerdere regels binnen één cel via zachte enter (w:br)
+        regels = tekst.split("\n")
+        for i, regel in enumerate(regels):
+            run = para.add_run(regel)
+            if oranje:
+                run.font.color.rgb = ORANJE
+            # Voeg zachte enter toe na elke regel behalve de laatste
+            if i < len(regels) - 1:
+                br = OxmlElement('w:br')
+                run._r.addnext(br)
     else:
         run = para.add_run(tekst)
         if oranje:
             run.font.color.rgb = ORANJE
-        # Kopieer opmaak van eventueel eerste bestaande run
         if len(para.runs) > 1:
             eerste = para.runs[0]
             run.bold = eerste.bold
@@ -291,9 +302,8 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
     coord_str = f"X={coord_x:.2f}, Y={coord_y:.2f}" if coord_x and coord_y else "—"
 
     # Gebiedsaanduidingen
-    gebiedsaand_str = ", ".join(
-        g.get("naam", "—") for g in data.get("alle_gebiedsaanduidingen", [])
-    ) or "—"
+    gebiedsaanduidingen_lijst = [g.get("naam", "—") for g in data.get("alle_gebiedsaanduidingen", [])]
+    gebiedsaand_str = ";\n".join(gebiedsaanduidingen_lijst) if gebiedsaanduidingen_lijst else "—"
 
     # Adres splitsen
     adres_delen = adres_gevonden.split(", ") if ", " in adres_gevonden else [adres_gevonden]
