@@ -202,13 +202,17 @@ if methode == "📍 Adres":
         zoek_knop = st.button("🔍 Ophalen")
 
 elif methode == "📐 RD-coördinaten":
-    st.caption("RD-coördinaten (EPSG:28992) — te vinden in de DSO viewer of op ruimtelijkeplannen.nl")
-    c1, c2, c3 = st.columns([2, 2, 1])
-    with c1: x_input = st.number_input("X (RD)", value=134789.0, step=1.0, format="%.2f")
-    with c2: y_input = st.number_input("Y (RD)", value=447145.0, step=1.0, format="%.2f")
-    with c3:
-        st.markdown("<br>", unsafe_allow_html=True)
-        zoek_knop = st.button("🔍 Ophalen")
+    st.caption("RD-coördinaten (EPSG:28992) — plak als 'X, Y' of vul apart in")
+    coord_input = st.text_input("Coördinaten", placeholder="bijv. 120747.8, 444943.7",
+        label_visibility="collapsed", key="coord_veld")
+    zoek_knop = st.button("🔍 Ophalen")
+    x_input = y_input = None
+    if coord_input:
+        try:
+            delen = coord_input.replace(" ", "").split(",")
+            x_input, y_input = float(delen[0]), float(delen[1])
+        except Exception:
+            st.warning("⚠️ Vul in als 'X, Y' — bijv. 120747.8, 444943.7")
 
 else:
     st.info("Testadres: **Graaf Walramhof 4, Nieuwegein**")
