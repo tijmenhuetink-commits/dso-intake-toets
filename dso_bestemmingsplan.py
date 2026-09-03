@@ -1,8 +1,8 @@
 """
 DSO Bestemmingsplan Data Ophaler
 ================================
-Versie : 4.0
-Datum  : 2026-09-03
+Versie : 4.1
+Datum  : 2026-04-03
 Wijzigingen:
   v0.1 — eerste versie
   v0.2 — Accept header gewijzigd naar application/hal+json
@@ -61,9 +61,8 @@ Wijzigingen:
   v3.8 — is_gemeentelijk_plan() ondersteunt nu ook oud IMRO2006 formaat (NL.IMRO.NNNNXXXX)
           zodat bijv. Fokkesteeg-Merwestein 2009 correct als gemeentelijk plan herkend wordt
   v3.9 — beheersverordeningen herkend aan plan-ID (BV na gemeentecode)
-  v4.0 — "herziening" als algemeen paraplu-keyword vervangen door specifiekere termen
-          zodat integrale herzieingen ("Tweede herziening bestemmingsplan Landelijk gebied")
-          correct als moederplan worden herkend in plaats van als paraplu gefilterd
+  v4.0 — herziening-keyword vervangen door specifiekere termen
+  v4.1 — x/y coördinaten toegevoegd aan resultaat-dict
           worden nu gefilterd als paraplu zodat het echte bestemmingsplan direct gekozen wordt
           rijks/provinciale plannen (NL.IMRO.0000.*) automatisch gefilterd
           extra keywords: omgevingsvisie, structuurvisie, geitenhouderij etc.
@@ -95,7 +94,7 @@ import requests
 import json
 import sys
 
-VERSION = "4.0"
+VERSION = "4.1"
 
 # ─────────────────────────────────────────────
 # CONFIGURATIE — pas hier je API-key aan
@@ -308,10 +307,7 @@ def is_parapluplan(plan: dict) -> bool:
         "terrasregel", "terrassen", "detailhandel", "reclame",
         "TAM-omgevingsplan", "tam-omgevingsplan",
         # Procedurele plannen
-        "voorbereidingsbesluit",
-        # Alleen thematische/partiële herzieingen als paraplu, niet integrale herzieingen
-        "partiële herziening", "partiele herziening",
-        "thematische herziening", "facetherziening",
+        "voorbereidingsbesluit", "herziening",
         # Rijks- en provinciale plannen — geen gemeentelijk bestemmingsplan
         "omgevingsvisie", "structuurvisie", "nationaal water programma",
         "programma noordzee", "bodem- en waterprogramma",
@@ -787,6 +783,8 @@ def haal_data_voor_coordinaten(x: float, y: float) -> dict:
         "adres": f"RD: {x:.2f}, {y:.2f}",
         "adres_gevonden": adres_gevonden,
         "kadastrale_aanduiding": kadastrale_aanduiding,
+        "x": x,
+        "y": y,
         "bestemmingsplan_naam": "—",
         "bestemmingsplan_datum": "—",
         "hyperlink": "—",
@@ -946,6 +944,8 @@ def haal_data_voor_adres(adres: str) -> dict:
     x, y = locatie["x"], locatie["y"]
     resultaat["adres_gevonden"]         = locatie["weergavenaam"]
     resultaat["kadastrale_aanduiding"]  = locatie["kadastrale_aanduiding"]
+    resultaat["x"]                      = x
+    resultaat["y"]                      = y
 
     # Stap 2: coördinaten → bestemmingsplan
     stap(2, "Vigerend bestemmingsplan ophalen")
