@@ -13,6 +13,8 @@ Wijzigingen:
   v3.3 — maatvoeringen gededupliceerd; hyperlink/omgevingsplan-cel fix
   v3.4 — gebiedsaanduidingen gescheiden met puntkomma en zachte enter per regel
   v3.5 — functieaanduidingen ook gescheiden met puntkomma en zachte enter per regel
+  v3.6 — bouwhoogte/goothoogte zoeklogica verbeterd voor gecombineerde API-namen
+          dynamische hyperlink Regels op de kaart met coördinaten en plan-ID
   v3.6 — hyperlink Regels op de kaart dynamisch met coördinaten en plan-ID
           gebiedsaanduidingen ingevuld als kommalijst
           sjabloon bijgewerkt naar Intaketoets.docx (Intaketoets.docx)
@@ -283,8 +285,8 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
                     return f"{m['waarde']} {m.get('eenheid', '')}".strip()
         return "—"
 
-    bouwhoogte = maatv(["bouwhoogte"])
-    goothoogte = maatv(["goothoogte"])
+    bouwhoogte = maatv(["maximum bouwhoogte", "bouwhoogte"])
+    goothoogte = maatv(["maximum goothoogte", "goothoogte"])
     opp        = maatv(["oppervlakte", "bebouwd", "bouwperceel"])
 
     # Planenoverzicht
