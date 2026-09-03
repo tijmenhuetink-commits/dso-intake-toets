@@ -1,7 +1,7 @@
 """
 DSO Bestemmingsplan Data Ophaler
 ================================
-Versie : 4.2
+Versie : 4.3
 Datum  : 2026-09-03
 Wijzigingen:
   v0.1 — eerste versie
@@ -94,7 +94,7 @@ import requests
 import json
 import sys
 
-VERSION = "4.2"
+VERSION = "4.3"
 
 # ─────────────────────────────────────────────
 # CONFIGURATIE — pas hier je API-key aan
@@ -670,6 +670,20 @@ def haal_dubbelbestemmingen(plan_id: str, x: float, y: float) -> list[str]:
 # STAP 6 — Maatvoeringen ophalen
 # ─────────────────────────────────────────────
 
+def _filter_maatvoeringen(maatvoeringen: list) -> list:
+    """Dedupliceer en filter irrelevante maatvoeringen."""
+    irrelevant = ["wooneenheid", "aantal woning", "aantal woon"]
+    gezien = {}
+    for m in maatvoeringen:
+        naam = m.get("naam", "").lower()
+        if naam not in gezien:
+            gezien[naam] = m
+    return [
+        m for m in gezien.values()
+        if not any(kw in m.get("naam", "").lower() for kw in irrelevant)
+    ]
+
+
 def haal_maatvoeringen(plan_id: str, vlak_id: str, x: float, y: float,
                        vlak_links: dict = None) -> list[dict]:
     """
@@ -704,7 +718,7 @@ def haal_maatvoeringen(plan_id: str, vlak_id: str, x: float, y: float,
                             waarde = o.get("waarde", "—")
                             resultaat.append({"naam": naam, "waarde": waarde, "eenheid": "m"})
                     if resultaat:
-                        return resultaat  # gevonden via bouwvlak
+                        return _filter_maatvoeringen(resultaat)  # gevonden via bouwvlak
 
     # Strategie 2: POST _zoek met _geo op de locatie
     url = f"{RP_BASE}/plannen/{plan_id}/maatvoeringen/_zoek"
@@ -734,27 +748,14 @@ def haal_maatvoeringen(plan_id: str, vlak_id: str, x: float, y: float,
         print("  Maatvoeringen  : geen gevonden voor dit vlak")
         return resultaat
 
-    # Dedupliceer op naam — bewaar eerste unieke waarde per naam
-    gezien = {}
-    for m in resultaat:
-        naam = m.get("naam", "").lower()
-        if naam not in gezien:
-            gezien[naam] = m
-
-    # Filter irrelevante maatvoeringen eruit
-    irrelevant = ["wooneenheid", "aantal woning", "aantal woon"]
-    gefilterd = [
-        m for m in gezien.values()
-        if not any(kw in m.get("naam", "").lower() for kw in irrelevant)
-    ]
-
-    if gefilterd:
+    if resultaat:
+        gefilterd = _filter_maatvoeringen(resultaat)
         for m in gefilterd:
             print(f"  Maatvoering    : {m['naam']} = {m['waarde']} {m.get('eenheid','')}")
-    else:
-        print("  Maatvoeringen  : geen relevante gevonden")
+        return gefilterd
 
-    return gefilterd
+    print("  Maatvoeringen  : geen gevonden voor dit vlak")
+    return []
 
 
 # ─────────────────────────────────────────────
