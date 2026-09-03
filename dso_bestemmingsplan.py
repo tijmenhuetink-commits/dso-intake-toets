@@ -67,6 +67,9 @@ Wijzigingen:
           resultaat: script werkt weer snel zonder lange fallback-keten
   v4.0 — "herziening" als algemeen paraplu-keyword vervangen door specifiekere termen
           x/y coördinaten toegevoegd aan resultaat-dict voor Word-generator
+  v4.5 — vlak_links correct doorgegeven in zowel adres- als coördinaten-flow
+          zodat maatvoeringen via bouwvlak _links (strategie 1) correct worden opgehaald
+          gebiedsaanduidingen toegevoegd aan coördinaten-flow
 
 Haalt automatisch bestemmingsplandata op voor een opgegeven adres.
 
@@ -886,6 +889,25 @@ def haal_data_voor_coordinaten(x: float, y: float) -> dict:
     if not bouwaanduidingen:
         print("  Bouwaanduidingen: geen")
     resultaat["bouwaanduidingen"] = bouwaanduidingen
+
+    # Gebiedsaanduidingen ophalen
+    geb_url  = f"{RP_BASE}/plannen/{plan['id']}/gebiedsaanduidingen/_zoek"
+    geb_body = {"_geo": {"intersects": {"type": "Point", "coordinates": [x, y]}}}
+    gr = requests.post(geb_url, headers=rp_headers(met_body=True),
+                       json=geb_body, params={"pageSize": 50}, timeout=15)
+    alle_geb = []
+    if gr.ok:
+        for item in (gr.json().get("_embedded") or {}).get("gebiedsaanduidingen", []):
+            naam = item.get("naam", "—")
+            type_ = item.get("type", "").lower()
+            if "dubbelbestemming" not in type_ and "dubbelbestemming" not in naam.lower():
+                alle_geb.append({"naam": naam, "type": type_})
+        if alle_geb:
+            for g in alle_geb:
+                print(f"  Gebiedsaand.   : {g['naam']}")
+        else:
+            print("  Gebiedsaand.   : geen")
+    resultaat["alle_gebiedsaanduidingen"] = alle_geb
 
     stap(6, "Maatvoeringen ophalen")
     resultaat["maatvoeringen"] = haal_maatvoeringen(
