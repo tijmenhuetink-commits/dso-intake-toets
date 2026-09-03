@@ -75,6 +75,14 @@ html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 .stButton > button { background:#1f4e79 !important; color:white !important; border:1px solid #1f6feb !important;
     border-radius:6px !important; font-weight:600 !important; width:100% !important; font-size:1rem !important; padding:.6rem 1.5rem !important; }
 #MainMenu, footer, header { visibility:hidden; }
+
+/* Radio buttons leesbaar op donkere achtergrond */
+.stRadio > div > label > div > p { color: #e6edf3 !important; }
+.stRadio > div > label { color: #e6edf3 !important; }
+
+/* Scrollbar altijd zichtbaar */
+html { overflow-y: scroll !important; }
+section.main > div { overflow-y: auto !important; }
 </style>
 """, unsafe_allow_html=True)
 
