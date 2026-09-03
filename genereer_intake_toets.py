@@ -1,7 +1,7 @@
 """
 DSO Intake Toets Generator
 ===========================
-Versie : 3.2
+Versie : 3.3
 Datum  : 2026-09-03
 Wijzigingen:
   v1.0 — eerste versie, Word-document gegenereerd vanuit DSO JSON-data
@@ -10,6 +10,7 @@ Wijzigingen:
   v3.1 — voorbereidingsbesluit-filter: alleen echte VB-plannen tonen op basis van plan-ID
           oranje tekst voor automatisch ingevulde DSO-velden
   v3.2 — RD-coördinaten ingevuld in Locatie-tabel
+  v3.3 — maatvoeringen gededupliceerd; hyperlink/omgevingsplan-cel fix
           gebiedsaanduidingen ingevuld als kommalijst
           sjabloon bijgewerkt naar Intaketoets.docx (Intaketoets.docx)
           exact dezelfde opmaak als het sjabloon, geen kleurcoderingen
@@ -32,7 +33,7 @@ Benodigdheden:
   pip install requests python-docx
 """
 
-VERSION = "3.2"
+VERSION = "3.3"
 
 import sys
 import os
@@ -253,9 +254,17 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
     bouw_str    = ", ".join(b["naam"] for b in data.get("bouwaanduidingen", [])) or "geen"
 
     maatvoeringen = data.get("maatvoeringen", [])
+    # Dedupliceer maatvoeringen op naam (bewaar eerste unieke waarde)
+    gezien_maat = {}
+    for m in maatvoeringen:
+        naam = m.get("naam", "").lower()
+        if naam not in gezien_maat:
+            gezien_maat[naam] = m
+    maatvoeringen_uniek = list(gezien_maat.values())
+
     def maatv(zoektermen):
         for z in zoektermen:
-            for m in maatvoeringen:
+            for m in maatvoeringen_uniek:
                 if z in m.get("naam", "").lower():
                     return f"{m['waarde']} {m.get('eenheid', '')}".strip()
         return "—"
@@ -300,15 +309,25 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
     cel = zoek_cel_naast(doc, "RD-coördinaten (ingevoerd)")
     vul_cel(cel, coord_str, oranje=True)
 
-    # Hyperlink regels op de kaart
-    cel = zoek_cel_naast(doc, "Hyperlink regels op de kaart")
-    vul_cel(cel, "Link",
-            hyperlink_url="https://omgevingswet.overheid.nl/regels-op-de-kaart/zoeken/locatie")
+    # Hyperlink regels op de kaart — zoek specifiek in tabel 6 (Omgevingsplan informatie)
+    for tbl in doc.tables:
+        for rij in tbl.rows:
+            if "Hyperlink regels op de kaart" in rij.cells[0].text:
+                if len(rij.cells) > 1:
+                    vul_cel(rij.cells[1], "Link",
+                        hyperlink_url="https://omgevingswet.overheid.nl/regels-op-de-kaart/zoeken/locatie")
+                break
 
-    # Omgevingsplan (nog niet beschikbaar via API)
-    cel = zoek_cel_naast(doc, "Omgevingsplan")
-    if cel:
-        vul_cel(cel, "zie Regels op de kaart")
+    # Omgevingsplan — zoek alleen de rij die direct na "Hyperlink regels op de kaart" staat
+    gevonden_hyperlink = False
+    for tbl in doc.tables:
+        for rij in tbl.rows:
+            if gevonden_hyperlink and rij.cells[0].text.strip() == "Omgevingsplan":
+                vul_cel(rij.cells[1], "zie Regels op de kaart")
+                gevonden_hyperlink = False
+                break
+            if "Hyperlink regels op de kaart" in rij.cells[0].text:
+                gevonden_hyperlink = True
 
     # Bestemmingsplan
     cel = zoek_cel_naast(doc, "Bestemmingsplan")
