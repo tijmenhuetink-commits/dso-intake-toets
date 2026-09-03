@@ -301,7 +301,7 @@ if st.session_state.fase == "resultaat" and st.session_state.data:
         st.markdown(f'<div class="terminal">{st.session_state.terminal_log}</div>', unsafe_allow_html=True)
     toon_resultaten(data)
     with st.expander("🔍 Ruwe API-data (debug)"):
-    st.json(data)
+        st.json(data)
     toon_download(data, label)
     if st.button("🔄 Nieuw adres opzoeken"):
         st.session_state.fase = "invoer"
