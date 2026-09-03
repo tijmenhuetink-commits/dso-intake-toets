@@ -1,14 +1,17 @@
 """
 DSO Intake Toets Generator
 ===========================
-Versie : 3.1
+Versie : 3.2
 Datum  : 2026-09-03
 Wijzigingen:
   v1.0 — eerste versie, Word-document gegenereerd vanuit DSO JSON-data
   v2.0 — niet-gedigitaliseerde plannen netjes afgehandeld
   v3.0 — volledig nieuw: gebaseerd op officieel ODU-sjabloon
   v3.1 — voorbereidingsbesluit-filter: alleen echte VB-plannen tonen op basis van plan-ID
-          oranje tekst voor automatisch ingevulde DSO-velden (Intaketoets.docx)
+          oranje tekst voor automatisch ingevulde DSO-velden
+  v3.2 — RD-coördinaten ingevuld in Locatie-tabel
+          gebiedsaanduidingen ingevuld als kommalijst
+          sjabloon bijgewerkt naar Intaketoets_v2.docx (Intaketoets.docx)
           exact dezelfde opmaak als het sjabloon, geen kleurcoderingen
           DSO-velden automatisch ingevuld op de juiste plekken
           Toets Omgevingsplan tekst automatisch samengesteld
@@ -29,7 +32,7 @@ Benodigdheden:
   pip install requests python-docx
 """
 
-VERSION = "3.1"
+VERSION = "3.2"
 
 import sys
 import os
@@ -47,7 +50,7 @@ from docx.shared import RGBColor
 # SJABLOON PAD
 # ─────────────────────────────────────────────
 eigen_map = os.path.dirname(os.path.abspath(sys.argv[0]))
-SJABLOON_PAD = os.path.join(eigen_map, "Intaketoets.docx")
+SJABLOON_PAD = os.path.join(eigen_map, "Intaketoets_v2.docx")
 
 
 # ─────────────────────────────────────────────
@@ -273,6 +276,16 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
             parkeer_str = p.get("naam", "—")
             break
 
+    # Coördinaten
+    coord_x = data.get("x")
+    coord_y = data.get("y")
+    coord_str = f"X={coord_x:.2f}, Y={coord_y:.2f}" if coord_x and coord_y else "—"
+
+    # Gebiedsaanduidingen
+    gebiedsaand_str = ", ".join(
+        g.get("naam", "—") for g in data.get("alle_gebiedsaanduidingen", [])
+    ) or "—"
+
     # Adres splitsen
     adres_delen = adres_gevonden.split(", ") if ", " in adres_gevonden else [adres_gevonden]
     straat_hnr  = adres_delen[0]
@@ -282,6 +295,10 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
     # Locatie: Straatnaam + huisnummer
     cel = zoek_cel_naast(doc, "Straatnaam + huisnummer")
     vul_cel(cel, straat_hnr, oranje=True)
+
+    # Locatie: RD-coördinaten
+    cel = zoek_cel_naast(doc, "RD-coördinaten (ingevoerd)")
+    vul_cel(cel, coord_str, oranje=True)
 
     # Hyperlink regels op de kaart
     cel = zoek_cel_naast(doc, "Hyperlink regels op de kaart")
@@ -308,6 +325,10 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
     # (Functie)aanduiding
     cel = zoek_cel_naast(doc, "(Functie)aanduiding")
     vul_cel(cel, functie_str if not niet_gedig else "zie hyperlink plan", oranje=True)
+
+    # Gebiedsaanduiding
+    cel = zoek_cel_naast(doc, "Gebiedsaanduiding")
+    vul_cel(cel, gebiedsaand_str, oranje=True)
 
     # Voorbereidingsbesluit
     cel = zoek_cel_naast(doc, "Voorbereidingsbesluit")
