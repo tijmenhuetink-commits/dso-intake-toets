@@ -11,7 +11,7 @@ Wijzigingen:
           oranje tekst voor automatisch ingevulde DSO-velden
   v3.2 — RD-coördinaten ingevuld in Locatie-tabel
           gebiedsaanduidingen ingevuld als kommalijst
-          sjabloon bijgewerkt naar Intaketoets_v2.docx (Intaketoets.docx)
+          sjabloon bijgewerkt naar Intaketoets.docx (Intaketoets.docx)
           exact dezelfde opmaak als het sjabloon, geen kleurcoderingen
           DSO-velden automatisch ingevuld op de juiste plekken
           Toets Omgevingsplan tekst automatisch samengesteld
@@ -50,7 +50,7 @@ from docx.shared import RGBColor
 # SJABLOON PAD
 # ─────────────────────────────────────────────
 eigen_map = os.path.dirname(os.path.abspath(sys.argv[0]))
-SJABLOON_PAD = os.path.join(eigen_map, "Intaketoets_v2.docx")
+SJABLOON_PAD = os.path.join(eigen_map, "Intaketoets.docx")
 
 
 # ─────────────────────────────────────────────
