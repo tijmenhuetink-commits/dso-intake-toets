@@ -1,7 +1,7 @@
 """
 DSO Bestemmingsplan Data Ophaler
 ================================
-Versie : 4.3
+Versie : 4.4
 Datum  : 2026-09-03
 Wijzigingen:
   v0.1 — eerste versie
@@ -94,7 +94,7 @@ import requests
 import json
 import sys
 
-VERSION = "4.3"
+VERSION = "4.4"
 
 # ─────────────────────────────────────────────
 # CONFIGURATIE — pas hier je API-key aan
@@ -716,7 +716,8 @@ def haal_maatvoeringen(plan_id: str, vlak_id: str, x: float, y: float,
                         for o in item.get("omvang", []):
                             naam = o.get("naam", "—")
                             waarde = o.get("waarde", "—")
-                            resultaat.append({"naam": naam, "waarde": waarde, "eenheid": "m"})
+                            eenheid = "%" if "%" in naam else "m"
+                            resultaat.append({"naam": naam, "waarde": waarde, "eenheid": eenheid})
                     if resultaat:
                         return _filter_maatvoeringen(resultaat)  # gevonden via bouwvlak
 
@@ -738,7 +739,8 @@ def haal_maatvoeringen(plan_id: str, vlak_id: str, x: float, y: float,
                 onaam   = o.get("naam", naam)
                 owaarde = o.get("waarde", "—")
                 print(f"  Maatvoering    : {onaam} = {owaarde} m")
-                resultaat.append({"naam": onaam, "waarde": owaarde, "eenheid": "m"})
+                eenheid2 = "%" if "%" in onaam else "m"
+                resultaat.append({"naam": onaam, "waarde": owaarde, "eenheid": eenheid2})
         else:
             waarde = item.get("waarde", "—")
             print(f"  Maatvoering    : {naam} = {waarde}")
