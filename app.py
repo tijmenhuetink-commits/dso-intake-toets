@@ -83,8 +83,12 @@ html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 [data-testid="stRadio"] label { color: #e6edf3 !important; }
 [data-testid="stRadio"] p { color: #e6edf3 !important; }
 
-/* Scrollbar altijd zichtbaar */
+/* Scrollbar altijd zichtbaar en lichtgrijs */
 html { overflow-y: scroll !important; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #161b22; }
+::-webkit-scrollbar-thumb { background: #8b949e; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #e6edf3; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -166,12 +170,36 @@ def toon_resultaten(data):
         st.markdown(kaart("Bestemmingstype",    data.get("bestemmingstype","—")), unsafe_allow_html=True)
         st.markdown(kaart("Functieaanduiding",  ", ".join(data.get("functieaanduidingen",[])) or "geen"), unsafe_allow_html=True)
         st.markdown(kaart("Dubbelbestemming",   ", ".join(d["naam"] for d in data.get("dubbelbestemmingen",[])) or "geen"), unsafe_allow_html=True)
-    if data.get("maatvoeringen"):
-        st.markdown('<div class="sectie-header">Maatvoeringen</div>', unsafe_allow_html=True)
-        cols = st.columns(3)
-        for i, m in enumerate(data["maatvoeringen"]):
-            with cols[i % 3]:
-                st.markdown(kaart(m["naam"], f"{m['waarde']} {m.get('eenheid','')}".strip()), unsafe_allow_html=True)
+        geb = ", ".join(g["naam"] for g in data.get("alle_gebiedsaanduidingen",[])) or "geen"
+        st.markdown(kaart("Gebiedsaanduiding", geb), unsafe_allow_html=True)
+
+    # Maatvoeringen
+    maatvoeringen = data.get("maatvoeringen", [])
+    def maatv(zoektermen):
+        for z in zoektermen:
+            for m in maatvoeringen:
+                if z in m.get("naam", "").lower():
+                    return f"{m['waarde']} {m.get('eenheid','')}".strip()
+        return "—"
+
+    bouwhoogte = maatv(["bouwhoogte"])
+    goothoogte = maatv(["goothoogte"])
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(kaart("Max. bouwhoogte", bouwhoogte), unsafe_allow_html=True)
+    with col2:
+        st.markdown(kaart("Max. goothoogte", goothoogte), unsafe_allow_html=True)
+
+    if maatvoeringen:
+        overige = [m for m in maatvoeringen if not any(
+            kw in m.get("naam","").lower() for kw in ["bouwhoogte","goothoogte"])]
+        if overige:
+            st.markdown('<div class="sectie-header">Overige maatvoeringen</div>', unsafe_allow_html=True)
+            cols = st.columns(3)
+            for i, m in enumerate(overige):
+                with cols[i % 3]:
+                    st.markdown(kaart(m["naam"], f"{m['waarde']} {m.get('eenheid','')}".strip()), unsafe_allow_html=True)
 
 def toon_download(data, label):
     st.markdown("---")
@@ -316,7 +344,9 @@ if st.session_state.fase == "resultaat" and st.session_state.data:
         st.markdown(f'<div class="terminal">{st.session_state.terminal_log}</div>', unsafe_allow_html=True)
     toon_resultaten(data)
     with st.expander("🔍 Ruwe API-data (debug)"):
-        st.json(data)
+        import json as _json
+        json_str = _json.dumps(data, ensure_ascii=False, indent=2)
+        st.code(json_str, language="json")
     toon_download(data, label)
     if st.button("🔄 Nieuw adres opzoeken"):
         st.session_state.fase = "invoer"
