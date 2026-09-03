@@ -1,8 +1,8 @@
 """
 DSO Bestemmingsplan Data Ophaler
 ================================
-Versie : 4.2
-Datum  : 2026-04-03
+Versie : 4.0
+Datum  : 2026-09-03
 Wijzigingen:
   v0.1 — eerste versie
   v0.2 — Accept header gewijzigd naar application/hal+json
@@ -61,12 +61,12 @@ Wijzigingen:
   v3.8 — is_gemeentelijk_plan() ondersteunt nu ook oud IMRO2006 formaat (NL.IMRO.NNNNXXXX)
           zodat bijv. Fokkesteeg-Merwestein 2009 correct als gemeentelijk plan herkend wordt
   v3.9 — beheersverordeningen herkend aan plan-ID (BV na gemeentecode)
-  v4.0 — herziening-keyword vervangen door specifiekere termen
-  v4.1 — x/y coördinaten toegevoegd aan resultaat-dict
           worden nu gefilterd als paraplu zodat het echte bestemmingsplan direct gekozen wordt
           rijks/provinciale plannen (NL.IMRO.0000.*) automatisch gefilterd
           extra keywords: omgevingsvisie, structuurvisie, geitenhouderij etc.
           resultaat: script werkt weer snel zonder lange fallback-keten
+  v4.0 — "herziening" als algemeen paraplu-keyword vervangen door specifiekere termen
+          x/y coördinaten toegevoegd aan resultaat-dict voor Word-generator
 
 Haalt automatisch bestemmingsplandata op voor een opgegeven adres.
 
@@ -94,7 +94,7 @@ import requests
 import json
 import sys
 
-VERSION = "4.2"
+VERSION = "4.0"
 
 # ─────────────────────────────────────────────
 # CONFIGURATIE — pas hier je API-key aan
@@ -307,7 +307,10 @@ def is_parapluplan(plan: dict) -> bool:
         "terrasregel", "terrassen", "detailhandel", "reclame",
         "TAM-omgevingsplan", "tam-omgevingsplan",
         # Procedurele plannen
-        "voorbereidingsbesluit", "herziening",
+        "voorbereidingsbesluit",
+        # Alleen thematische/partiële herzieingen als paraplu, niet integrale herzieingen
+        "partiële herziening", "partiele herziening",
+        "thematische herziening", "facetherziening",
         # Rijks- en provinciale plannen — geen gemeentelijk bestemmingsplan
         "omgevingsvisie", "structuurvisie", "nationaal water programma",
         "programma noordzee", "bodem- en waterprogramma",
@@ -326,10 +329,7 @@ def is_parapluplan(plan: dict) -> bool:
         rest = plan_id[len("NL.IMRO."):]          # bijv. "0356.BVFM2018-OH02"
         na_gemeente = rest[4:].lstrip(".").upper() # bijv. "BVFM2018-OH02"
         if na_gemeente.startswith("BV") or "BEHEERS" in na_gemeente:
-            return True  # beheersverordening
-        # Ontwerp-plannen herkennen aan -ON suffix
-        if "-ON" in plan_id.upper():
-            return True  # ontwerp, niet als moederplan gebruiken
+            return True  # beheersverordening, niet als moederplan gebruiken
 
     # Geen gemeentelijk plan = behandel als paraplu/niet-relevant
     return not is_gemeentelijk_plan(plan)
