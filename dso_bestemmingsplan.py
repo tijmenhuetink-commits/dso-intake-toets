@@ -1,7 +1,7 @@
 """
 DSO Bestemmingsplan Data Ophaler
 ================================
-Versie : 4.1
+Versie : 4.2
 Datum  : 2026-04-03
 Wijzigingen:
   v0.1 — eerste versie
@@ -94,7 +94,7 @@ import requests
 import json
 import sys
 
-VERSION = "4.1"
+VERSION = "4.2"
 
 # ─────────────────────────────────────────────
 # CONFIGURATIE — pas hier je API-key aan
@@ -326,7 +326,10 @@ def is_parapluplan(plan: dict) -> bool:
         rest = plan_id[len("NL.IMRO."):]          # bijv. "0356.BVFM2018-OH02"
         na_gemeente = rest[4:].lstrip(".").upper() # bijv. "BVFM2018-OH02"
         if na_gemeente.startswith("BV") or "BEHEERS" in na_gemeente:
-            return True  # beheersverordening, niet als moederplan gebruiken
+            return True  # beheersverordening
+        # Ontwerp-plannen herkennen aan -ON suffix
+        if "-ON" in plan_id.upper():
+            return True  # ontwerp, niet als moederplan gebruiken
 
     # Geen gemeentelijk plan = behandel als paraplu/niet-relevant
     return not is_gemeentelijk_plan(plan)
