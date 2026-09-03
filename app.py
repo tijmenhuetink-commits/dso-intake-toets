@@ -257,7 +257,12 @@ if zoek_knop:
             except Exception as e: st.error(f"❌ {e}"); st.stop()
 
         if not kandidaten:
-            st.error(f"❌ Geen adressen gevonden voor '{adres_input}'")
+            # Check of het eruitziet als coördinaten
+            import re
+            if re.match(r'^[\d\s.,]+$', adres_input.strip()):
+                st.error("❌ Dit ziet eruit als coördinaten. Gebruik de invoermethode **📐 RD-coördinaten** hierboven!")
+            else:
+                st.error(f"❌ Geen adressen gevonden voor '{adres_input}'. Voeg de plaatsnaam toe voor een betere match.")
             st.session_state.fase = "invoer"
         elif len(kandidaten) == 1:
             # Directe match — meteen ophalen
