@@ -1,7 +1,7 @@
 """
 DSO Intake Toets Generator
 ===========================
-Versie : 3.4
+Versie : 3.5
 Datum  : 2026-09-03
 Wijzigingen:
   v1.0 — eerste versie, Word-document gegenereerd vanuit DSO JSON-data
@@ -12,6 +12,7 @@ Wijzigingen:
   v3.2 — RD-coördinaten ingevuld in Locatie-tabel
   v3.3 — maatvoeringen gededupliceerd; hyperlink/omgevingsplan-cel fix
   v3.4 — gebiedsaanduidingen gescheiden met puntkomma en zachte enter per regel
+  v3.5 — functieaanduidingen ook gescheiden met puntkomma en zachte enter per regel
           gebiedsaanduidingen ingevuld als kommalijst
           sjabloon bijgewerkt naar Intaketoets.docx (Intaketoets.docx)
           exact dezelfde opmaak als het sjabloon, geen kleurcoderingen
@@ -34,7 +35,7 @@ Benodigdheden:
   pip install requests python-docx
 """
 
-VERSION = "3.4"
+VERSION = "3.5"
 
 import sys
 import os
@@ -260,7 +261,8 @@ def genereer_intake_toets(data: dict, uitvoer_pad: str = None) -> str:
     kadaster        = data.get("kadastrale_aanduiding", "—")
     niet_gedig      = data.get("niet_gedigitaliseerd", False)
 
-    functie_str = ", ".join(data.get("functieaanduidingen", [])) or "geen"
+    functie_lijst = data.get("functieaanduidingen", [])
+    functie_str = ";\n".join(functie_lijst) if functie_lijst else "geen"
     dubbel_str  = ", ".join(d["naam"] for d in data.get("dubbelbestemmingen", [])) or "geen"
     bouw_str    = ", ".join(b["naam"] for b in data.get("bouwaanduidingen", [])) or "geen"
 
