@@ -178,12 +178,14 @@ def toon_resultaten(data):
     def maatv(zoektermen):
         for z in zoektermen:
             for m in maatvoeringen:
-                if z in m.get("naam", "").lower():
+                naam = m.get("naam", "").lower()
+                if z in naam:
                     return f"{m['waarde']} {m.get('eenheid','')}".strip()
         return "—"
 
-    bouwhoogte = maatv(["bouwhoogte"])
-    goothoogte = maatv(["goothoogte"])
+    # API geeft soms gecombineerde namen terug zoals "maatvoering; hoogte; bouwhoogte; maximum bouwhoogte (m)"
+    bouwhoogte = maatv(["maximum bouwhoogte", "bouwhoogte"])
+    goothoogte = maatv(["maximum goothoogte", "goothoogte"])
 
     col1, col2 = st.columns(2)
     with col1:
