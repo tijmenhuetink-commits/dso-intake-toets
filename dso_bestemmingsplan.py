@@ -1,7 +1,7 @@
 """
 DSO Bestemmingsplan Data Ophaler
 ================================
-Versie : 4.4
+Versie : 4.5
 Datum  : 2026-09-03
 Wijzigingen:
   v0.1 — eerste versie
@@ -94,7 +94,7 @@ import requests
 import json
 import sys
 
-VERSION = "4.4"
+VERSION = "4.5"
 
 # ─────────────────────────────────────────────
 # CONFIGURATIE — pas hier je API-key aan
@@ -1051,7 +1051,7 @@ def haal_data_voor_adres(adres: str) -> dict:
 
     # Stap 6: maatvoeringen
     stap(6, "Maatvoeringen ophalen")
-    resultaat["maatvoeringen"] = haal_maatvoeringen(plan["id"], vlak["id"], x, y)
+    resultaat["maatvoeringen"] = haal_maatvoeringen(plan["id"], vlak["id"], x, y, vlak.get("links", {}))
 
     _print_samenvatting(resultaat)
 
