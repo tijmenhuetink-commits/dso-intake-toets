@@ -1,7 +1,7 @@
 """
 DSO Bestemmingsplan Data Ophaler
 ================================
-Versie : 4.1
+Versie : 4.2
 Datum  : 2026-09-03
 Wijzigingen:
   v0.1 — eerste versie
@@ -65,8 +65,7 @@ Wijzigingen:
           rijks/provinciale plannen (NL.IMRO.0000.*) automatisch gefilterd
           extra keywords: omgevingsvisie, structuurvisie, geitenhouderij etc.
           resultaat: script werkt weer snel zonder lange fallback-keten
-  v4.0 — "herziening" als algemeen paraplu-keyword vervangen
-  v4.1 — gebiedsaanduidingen correct opgehaald en in resultaat-dict gezet door specifiekere termen
+  v4.0 — "herziening" als algemeen paraplu-keyword vervangen door specifiekere termen
           x/y coördinaten toegevoegd aan resultaat-dict voor Word-generator
 
 Haalt automatisch bestemmingsplandata op voor een opgegeven adres.
@@ -95,7 +94,7 @@ import requests
 import json
 import sys
 
-VERSION = "4.1"
+VERSION = "4.2"
 
 # ─────────────────────────────────────────────
 # CONFIGURATIE — pas hier je API-key aan
@@ -733,8 +732,29 @@ def haal_maatvoeringen(plan_id: str, vlak_id: str, x: float, y: float,
 
     if not resultaat:
         print("  Maatvoeringen  : geen gevonden voor dit vlak")
+        return resultaat
 
-    return resultaat
+    # Dedupliceer op naam — bewaar eerste unieke waarde per naam
+    gezien = {}
+    for m in resultaat:
+        naam = m.get("naam", "").lower()
+        if naam not in gezien:
+            gezien[naam] = m
+
+    # Filter irrelevante maatvoeringen eruit
+    irrelevant = ["wooneenheid", "aantal woning", "aantal woon"]
+    gefilterd = [
+        m for m in gezien.values()
+        if not any(kw in m.get("naam", "").lower() for kw in irrelevant)
+    ]
+
+    if gefilterd:
+        for m in gefilterd:
+            print(f"  Maatvoering    : {m['naam']} = {m['waarde']} {m.get('eenheid','')}")
+    else:
+        print("  Maatvoeringen  : geen relevante gevonden")
+
+    return gefilterd
 
 
 # ─────────────────────────────────────────────
@@ -849,25 +869,6 @@ def haal_data_voor_coordinaten(x: float, y: float) -> dict:
     else:
         print("  Dubbelbestemm. : geen")
     resultaat["dubbelbestemmingen"] = dubbel_uit_vlak
-
-    # Gebiedsaanduidingen ophalen
-    geb_url  = f"{RP_BASE}/plannen/{plan['id']}/gebiedsaanduidingen/_zoek"
-    geb_body = {"_geo": {"intersects": {"type": "Point", "coordinates": [x, y]}}}
-    gr = requests.post(geb_url, headers=rp_headers(met_body=True),
-                       json=geb_body, params={"pageSize": 50}, timeout=15)
-    alle_geb = []
-    if gr.ok:
-        for item in (gr.json().get("_embedded") or {}).get("gebiedsaanduidingen", []):
-            naam = item.get("naam", "—")
-            type_ = item.get("type", "").lower()
-            if "dubbelbestemming" not in type_ and "dubbelbestemming" not in naam.lower():
-                alle_geb.append({"naam": naam, "type": type_})
-        if alle_geb:
-            for g in alle_geb:
-                print(f"  Gebiedsaand.   : {g['naam']}")
-        else:
-            print("  Gebiedsaand.   : geen")
-    resultaat["alle_gebiedsaanduidingen"] = alle_geb
 
     bouw_url = f"{RP_BASE}/plannen/{plan['id']}/bouwaanduidingen/_zoek"
     bouw_body = {"_geo": {"intersects": {"type": "Point", "coordinates": [x, y]}}}
@@ -1025,25 +1026,6 @@ def haal_data_voor_adres(adres: str) -> dict:
     else:
         print("  Dubbelbestemm. : geen")
     resultaat["dubbelbestemmingen"] = dubbel_uit_vlak
-
-    # Gebiedsaanduidingen ophalen
-    geb_url  = f"{RP_BASE}/plannen/{plan['id']}/gebiedsaanduidingen/_zoek"
-    geb_body = {"_geo": {"intersects": {"type": "Point", "coordinates": [x, y]}}}
-    gr = requests.post(geb_url, headers=rp_headers(met_body=True),
-                       json=geb_body, params={"pageSize": 50}, timeout=15)
-    alle_geb = []
-    if gr.ok:
-        for item in (gr.json().get("_embedded") or {}).get("gebiedsaanduidingen", []):
-            naam = item.get("naam", "—")
-            type_ = item.get("type", "").lower()
-            if "dubbelbestemming" not in type_ and "dubbelbestemming" not in naam.lower():
-                alle_geb.append({"naam": naam, "type": type_})
-        if alle_geb:
-            for g in alle_geb:
-                print(f"  Gebiedsaand.   : {g['naam']}")
-        else:
-            print("  Gebiedsaand.   : geen")
-    resultaat["alle_gebiedsaanduidingen"] = alle_geb
 
     # Bouwaanduidingen via POST _zoek met punt
     bouw_url = f"{RP_BASE}/plannen/{plan['id']}/bouwaanduidingen/_zoek"
