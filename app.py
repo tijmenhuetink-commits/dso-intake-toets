@@ -204,8 +204,8 @@ if methode == "📍 Adres":
 elif methode == "📐 RD-coördinaten":
     st.caption("RD-coördinaten (EPSG:28992) — te vinden in de DSO viewer of op ruimtelijkeplannen.nl")
     c1, c2, c3 = st.columns([2, 2, 1])
-    with c1: x_input = st.number_input("X (RD)", value=134789, step=1, format="%d")
-    with c2: y_input = st.number_input("Y (RD)", value=447145, step=1, format="%d")
+    with c1: x_input = st.number_input("X (RD)", value=134789.0, step=1.0, format="%.2f")
+    with c2: y_input = st.number_input("Y (RD)", value=447145.0, step=1.0, format="%.2f")
     with c3:
         st.markdown("<br>", unsafe_allow_html=True)
         zoek_knop = st.button("🔍 Ophalen")
